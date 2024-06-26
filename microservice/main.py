@@ -2,6 +2,9 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlmodel import SQLModel, Field, create_engine, Session, select
 from typing import AsyncGenerator, Optional
 from contextlib import asynccontextmanager, contextmanager
+from microservice import settings
+from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
+import json
 
 # Defining the Order model
 class Order(SQLModel, table=True):
@@ -30,10 +33,12 @@ async def root():
 
 @app.post("/create_order")
 async def create_order(order: Order):
-    return {
-        "id": 1,
-        "username": "nouman",
-        "product_id": 1,
-        "product_name": "Laptop",
-        "product_price": 200        
-    }
+    producer=AIOKafkaProducer(settings.BOOTSTRAP_SERVER) 
+    await producer.start()
+    productJson=json.dumps(order.__dict__).encode('utf-8')
+    try:
+        await producer.send_and_wait(settings.KAFKA_ORDER_TOPIC)
+        print(productJson)
+    finally:
+        await producer.stop()
+    return productJson
